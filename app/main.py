@@ -57,8 +57,13 @@ app.include_router(devices.router, prefix="/api", tags=["devices"])
 app.include_router(switching.router, prefix="/api", tags=["switching"])
 app.include_router(storage.router, prefix="/api", tags=["storage"])
 
-# Mount static files
-static_path = Path(__file__).parent / "static"
+# Mount static files - handle PyInstaller bundle path
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Running as PyInstaller bundle
+    static_path = Path(sys._MEIPASS) / "app" / "static"
+else:
+    # Running from source
+    static_path = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 

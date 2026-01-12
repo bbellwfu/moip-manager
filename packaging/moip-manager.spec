@@ -9,6 +9,12 @@ project_root = Path(SPECPATH).parent
 
 block_cipher = None
 
+# Icon paths (use None if icons don't exist yet)
+mac_icon_path = project_root / 'packaging' / 'icons' / 'icon.icns'
+win_icon_path = project_root / 'packaging' / 'icons' / 'icon.ico'
+mac_icon = str(mac_icon_path) if mac_icon_path.exists() else None
+win_icon = str(win_icon_path) if win_icon_path.exists() else None
+
 # Collect all data files (static assets, templates, etc.)
 datas = [
     (str(project_root / 'app' / 'static'), 'app/static'),
@@ -62,8 +68,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(project_root / 'packaging' / 'icons' / 'icon.icns') if sys.platform == 'darwin'
-         else str(project_root / 'packaging' / 'icons' / 'icon.ico'),
+    icon=mac_icon if sys.platform == 'darwin' else win_icon,
 )
 
 coll = COLLECT(
@@ -82,7 +87,7 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='MoIP Manager.app',
-        icon=str(project_root / 'packaging' / 'icons' / 'icon.icns'),
+        icon=mac_icon,
         bundle_identifier='com.moip.manager',
         info_plist={
             'CFBundleName': 'MoIP Manager',

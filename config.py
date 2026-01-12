@@ -61,7 +61,7 @@ MOIP_API_PASSWORD = os.getenv("MOIP_API_PASSWORD", "")
 
 # Web Server Settings
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
-WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
+WEB_PORT = int(os.getenv("WEB_PORT", "6647"))  # 6647 = MOIP on phone keypad
 
 
 def get_moip_settings() -> dict:

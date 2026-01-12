@@ -89,11 +89,11 @@ MOIP_API_PASSWORD=your_password
 python run.py
 ```
 
-The web interface will be available at `http://localhost:8000`
+The web interface will be available at `http://localhost:6647`
 
 ## First-Time Setup
 
-1. Open your browser to `http://localhost:8000`
+1. Open your browser to `http://localhost:6647`
 2. Navigate to the **Settings** tab
 3. Enter your controller's IP address and credentials
 4. Click **Test Connection** to verify connectivity

@@ -154,13 +154,13 @@ Get base device information.
 **Response:**
 ```json
 {
-  "mac": "D4:6A:91:62:8A:9C",
+  "mac": "XX:XX:XX:XX:XX:XX",
   "model": "B-900-MOIP-4K-CTRL",
   "name": "OvrC-MoIP",
   "platform": "BPi",
   "platformVersion": "4.5.4",
   "serial": "",
-  "serviceTag": "ST2145063202001B",
+  "serviceTag": "XXXXXXXXXXXXXXXXX",
   "version": "4.5.4"
 }
 ```
@@ -216,13 +216,13 @@ Get LAN/network configuration.
 {
   "deviceName": "OvrC-MoIP",
   "dhcpEnabled": true,
-  "dnsServer1": "192.168.40.1",
+  "dnsServer1": "192.168.1.1",
   "dnsServer2": "8.8.8.8",
-  "lanAddress": "192.168.40.20",
-  "lanDefaultGateway": "192.168.40.1",
-  "lanDnsServer": "192.168.40.1",
+  "lanAddress": "192.168.1.100",
+  "lanDefaultGateway": "192.168.1.1",
+  "lanDnsServer": "192.168.1.1",
   "lanSubnetMask": "255.255.255.0",
-  "macAddress": "D4:6A:91:62:8A:9C",
+  "macAddress": "XX:XX:XX:XX:XX:XX",
   "staticdns": true
 }
 ```

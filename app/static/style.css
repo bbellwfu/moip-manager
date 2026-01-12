@@ -43,6 +43,18 @@ header h1 {
     font-weight: 600;
 }
 
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-logo {
+    width: 45px;
+    height: 45px;
+    border-radius: 8px;
+}
+
 .header-controls {
     display: flex;
     align-items: center;
@@ -924,6 +936,45 @@ section h2 {
 .device-type-rx {
     color: var(--success-color);
     font-weight: 500;
+}
+
+/* Snapshots Explainer */
+.snapshot-explainer {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.snapshot-explainer-text {
+    color: var(--text-color);
+    font-size: 0.925rem;
+    line-height: 1.5;
+    margin: 0 0 0.75rem 0;
+}
+
+.snapshot-examples {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.example-label {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.example-tag {
+    background: white;
+    color: var(--primary-color);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    border: 1px solid #bae6fd;
 }
 
 /* Snapshots List */

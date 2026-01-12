@@ -32,6 +32,12 @@ hiddenimports = [
     'uvicorn.protocols.websockets.auto',
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
+    # System tray support
+    'pystray',
+    'pystray._darwin',
+    'pystray._win32',
+    'PIL',
+    'PIL.Image',
 ]
 
 a = Analysis(

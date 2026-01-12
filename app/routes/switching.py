@@ -10,7 +10,8 @@ router = APIRouter()
 
 def get_telnet_client() -> MoIPClient:
     """Get a MoIP telnet client."""
-    return MoIPClient(config.MOIP_HOST, config.MOIP_TELNET_PORT)
+    settings = config.get_moip_settings()
+    return MoIPClient(settings["host"], settings["telnet_port"])
 
 
 @router.get("/routing", response_model=list[RoutingEntry])

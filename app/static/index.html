@@ -9,7 +9,10 @@
 </head>
 <body>
     <header>
-        <h1>MoIP Manager</h1>
+        <div class="header-brand">
+            <img src="/static/logo.png" alt="MoIP Manager" class="header-logo">
+            <h1>MoIP Manager</h1>
+        </div>
         <div class="header-controls">
             <span id="activity-status" class="activity-indicator"></span>
             <span id="connection-status" class="status-indicator disconnected">Disconnected</span>
@@ -120,6 +123,20 @@
                     <h2>Configuration Snapshots</h2>
                     <button class="save-btn" onclick="openSnapshotModal()">Save Current Config</button>
                 </div>
+                <div class="snapshot-explainer">
+                    <p class="snapshot-explainer-text">
+                        Snapshots save the current state of your MoIP system, including <strong>which source each display is watching</strong>
+                        and <strong>device names</strong>. Use snapshots to quickly switch between different configurations or restore
+                        a previous setup.
+                    </p>
+                    <div class="snapshot-examples">
+                        <span class="example-label">Example uses:</span>
+                        <span class="example-tag">Party Mode</span>
+                        <span class="example-tag">Normal Daily</span>
+                        <span class="example-tag">Movie Night</span>
+                        <span class="example-tag">Before Changes</span>
+                    </div>
+                </div>
                 <div id="snapshots-list">
                     <!-- Snapshots will be inserted here -->
                 </div>
@@ -136,7 +153,7 @@
                         <div class="settings-grid">
                             <div class="setting-item">
                                 <label for="setting-controller-ip">Controller IP Address</label>
-                                <input type="text" id="setting-controller-ip" placeholder="192.168.40.20">
+                                <input type="text" id="setting-controller-ip" placeholder="192.168.1.100">
                             </div>
                             <div class="setting-item">
                                 <label for="setting-telnet-port">Telnet Port</label>

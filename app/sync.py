@@ -48,11 +48,12 @@ def sync_devices():
     logger.info("Starting device sync from controller...")
 
     try:
-        telnet_client = MoIPClient(config.MOIP_HOST, config.MOIP_TELNET_PORT)
+        settings = config.get_moip_settings()
+        telnet_client = MoIPClient(settings["host"], settings["telnet_port"])
         api_client = MoIPAPIClient(
-            config.MOIP_HOST,
-            config.MOIP_API_USERNAME,
-            config.MOIP_API_PASSWORD
+            settings["host"],
+            settings["username"],
+            settings["password"]
         )
 
         # Get device counts from telnet
@@ -154,7 +155,8 @@ def create_config_snapshot(name: str, description: str = None) -> int:
     - Current routing assignments
     - Device characteristics
     """
-    telnet_client = MoIPClient(config.MOIP_HOST, config.MOIP_TELNET_PORT)
+    settings = config.get_moip_settings()
+    telnet_client = MoIPClient(settings["host"], settings["telnet_port"])
 
     # Get current routing
     routing = telnet_client.get_routing()
@@ -165,7 +167,7 @@ def create_config_snapshot(name: str, description: str = None) -> int:
 
     snapshot_data = {
         'timestamp': datetime.now().isoformat(),
-        'controller_ip': config.MOIP_HOST,
+        'controller_ip': settings["host"],
         'routing': routing_data,
         'devices': devices
     }
@@ -194,11 +196,12 @@ def restore_config_snapshot(snapshot_id: int, restore_routing: bool = True, rest
     data = snapshot['snapshot_data']
     results = {'routing_restored': 0, 'names_restored': 0, 'errors': []}
 
-    telnet_client = MoIPClient(config.MOIP_HOST, config.MOIP_TELNET_PORT)
+    settings = config.get_moip_settings()
+    telnet_client = MoIPClient(settings["host"], settings["telnet_port"])
     api_client = MoIPAPIClient(
-        config.MOIP_HOST,
-        config.MOIP_API_USERNAME,
-        config.MOIP_API_PASSWORD
+        settings["host"],
+        settings["username"],
+        settings["password"]
     )
 
     # Restore routing

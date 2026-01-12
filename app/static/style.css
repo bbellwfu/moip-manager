@@ -368,6 +368,46 @@ section h2 {
     background: linear-gradient(to right, #fffbeb, var(--card-bg) 20%);
 }
 
+.receiver-card.videowall-receiver {
+    border-left-color: #8b5cf6;
+    background: linear-gradient(to right, #f5f3ff, var(--card-bg) 20%);
+}
+
+.rx-type-icon.videowall {
+    color: #7c3aed;
+}
+
+.rx-index-badge.videowall {
+    color: #7c3aed;
+    background: #f5f3ff;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+}
+
+/* Video Wall settings */
+.videowall-settings {
+    background: #f5f3ff;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+}
+
+.videowall-state {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.videowall-state.active {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.videowall-state.idle {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
 .receiver-name:hover {
     color: var(--primary-color);
 }

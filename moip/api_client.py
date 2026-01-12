@@ -381,3 +381,82 @@ class MoIPAPIClient:
             raise ValueError(f"No video_rx found for receiver {rx_index}")
         return self._request("PUT", f"/moip/video_rx/{video_rx_id}",
                            json={"settings": {"hdcp": hdcp}})
+
+    # Video Wall Methods
+
+    def get_vidwall_ids(self) -> list[int]:
+        """Get list of all video wall IDs."""
+        data = self._request("GET", "/moip/vidwall")
+        return data.get("items", [])
+
+    def get_vidwall(self, vidwall_id: int) -> dict:
+        """
+        Get video wall details.
+
+        Args:
+            vidwall_id: Video wall ID
+
+        Returns:
+            Video wall data including settings, associations, and status
+        """
+        return self._request("GET", f"/moip/vidwall/{vidwall_id}")
+
+    def get_all_vidwalls_detailed(self) -> list[dict]:
+        """
+        Get detailed information for all video walls.
+
+        Returns:
+            List of video wall data dictionaries
+        """
+        vidwall_ids = self.get_vidwall_ids()
+        vidwalls = []
+        for vw_id in vidwall_ids:
+            try:
+                vw = self.get_vidwall(vw_id)
+                vidwalls.append(vw)
+            except Exception:
+                pass
+        return vidwalls
+
+    def set_vidwall_name(self, vidwall_id: int, name: str) -> None:
+        """
+        Set video wall name.
+
+        Args:
+            vidwall_id: Video wall ID
+            name: New name
+        """
+        self._request("PUT", f"/moip/vidwall/{vidwall_id}",
+                     json={"settings": {"name": name}})
+
+    def set_vidwall_layout(self, vidwall_id: int, width: int, height: int) -> None:
+        """
+        Set video wall layout (grid dimensions).
+
+        Args:
+            vidwall_id: Video wall ID
+            width: Number of columns (2, 3, or 4)
+            height: Number of rows (2, 3, or 4)
+        """
+        self._request("PUT", f"/moip/vidwall/{vidwall_id}",
+                     json={"settings": {"width": width, "height": height}})
+
+    def set_vidwall_source(self, vidwall_id: int, tx_index: int) -> None:
+        """
+        Set the transmitter source for a video wall.
+
+        Args:
+            vidwall_id: Video wall ID
+            tx_index: Transmitter index (1-based), or 0 to unassign
+        """
+        # Find the group_tx ID for this tx_index
+        paired_tx = None
+        if tx_index > 0:
+            groups = self.get_all_group_tx_detailed()
+            for g in groups:
+                if g.get("settings", {}).get("index") == tx_index:
+                    paired_tx = g.get("id")
+                    break
+
+        self._request("PUT", f"/moip/vidwall/{vidwall_id}",
+                     json={"associations": {"paired_tx": paired_tx}})

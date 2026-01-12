@@ -74,3 +74,23 @@ class SystemStatus(BaseModel):
     active_streams: int
     controller_ip: str
     controller_firmware: Optional[str] = None
+
+
+class VideoWall(BaseModel):
+    """Video wall configuration."""
+    id: int = Field(description="Video wall ID")
+    index: int = Field(description="Receiver index for this video wall")
+    name: str = Field(description="Display name")
+    width: int = Field(description="Number of columns (2-4)")
+    height: int = Field(description="Number of rows (2-4)")
+    state: str = Field(default="stopped", description="Current state (running/stopped)")
+    current_tx: Optional[int] = Field(default=None, description="Currently assigned transmitter index")
+    current_tx_name: Optional[str] = Field(default=None, description="Name of current transmitter")
+
+
+class VideoWallUpdate(BaseModel):
+    """Request to update video wall settings."""
+    name: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    width: Optional[int] = Field(default=None, ge=2, le=4)
+    height: Optional[int] = Field(default=None, ge=2, le=4)
+    tx: Optional[int] = Field(default=None, ge=0, description="Transmitter index (0 to unassign)")

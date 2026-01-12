@@ -6,7 +6,7 @@ from typing import Optional
 
 import config
 from moip import MoIPClient, MoIPAPIClient
-from moip.models import Transmitter, Receiver, DeviceCounts, DeviceNameUpdate, SystemStatus
+from moip.models import Transmitter, Receiver, DeviceCounts, DeviceNameUpdate, SystemStatus, VideoWall, VideoWallUpdate
 from app import database as db
 
 router = APIRouter()
@@ -151,10 +151,20 @@ async def get_all_devices():
 
         sorted_rx_groups = sorted(rx_groups, key=rx_sort_key)
 
-        # Track how many devices we've seen at each index (for differentiating duplicates)
-        index_counts = {}
+        # Get all RX indexes from group_rx
+        group_rx_indexes = set(
+            g.get("settings", {}).get("index")
+            for g in rx_groups
+            if g.get("settings", {}).get("index") is not None
+        )
+
+        # Find Video Walls: receivers in routing but not in group_rx
+        routing_indexes = set(rx_to_tx.keys())
+        videowall_indexes = routing_indexes - group_rx_indexes
 
         receivers = []
+
+        # Add regular receivers from group_rx
         for group in sorted_rx_groups:
             idx = group.get("settings", {}).get("index")
             if idx is None:
@@ -163,11 +173,6 @@ async def get_all_devices():
             name = group.get("settings", {}).get("name", f"Rx{idx}")
             subtype = get_subtype(group)
             group_id = group.get("id")
-
-            # Track duplicates at same index
-            if idx not in index_counts:
-                index_counts[idx] = 0
-            index_counts[idx] += 1
 
             current_tx = rx_to_tx.get(idx, 0)
             receivers.append(Receiver(
@@ -179,6 +184,25 @@ async def get_all_devices():
                 current_tx_name=tx_names.get(current_tx) if current_tx > 0 else None,
                 status="streaming" if current_tx > 0 else "idle"
             ))
+
+        # Add Video Wall receivers (exist in routing but not in group_rx)
+        for idx in sorted(videowall_indexes):
+            current_tx = rx_to_tx.get(idx, 0)
+            receivers.append(Receiver(
+                id=idx,
+                name=f"Video Wall {idx}",
+                subtype="videowall",
+                current_tx=current_tx if current_tx > 0 else None,
+                current_tx_name=tx_names.get(current_tx) if current_tx > 0 else None,
+                status="streaming" if current_tx > 0 else "idle"
+            ))
+
+        # Sort all receivers by index then subtype
+        def final_sort_key(r):
+            subtype_order = {'av': 0, 'audio': 1, 'videowall': 2}.get(r.subtype, 3)
+            return (r.id, subtype_order)
+
+        receivers.sort(key=final_sort_key)
 
         return DevicesResponse(
             transmitters=transmitters,
@@ -778,5 +802,181 @@ async def cec_mute(rx_id: int):
             return {"success": True, "rx_id": rx_id, "action": "mute"}
         else:
             raise HTTPException(status_code=500, detail="CEC command failed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Video Wall Endpoints ---
+
+@router.get("/vidwalls", response_model=list[VideoWall])
+async def get_all_video_walls():
+    """Get all video walls with their configuration."""
+    api_client = get_api_client()
+    telnet_client = get_telnet_client()
+
+    try:
+        # Get routing for current sources
+        routing = telnet_client.get_routing()
+        rx_to_tx = {entry.rx: entry.tx for entry in routing}
+
+        # Get Tx names
+        tx_groups = api_client.get_all_group_tx_detailed()
+        tx_names = {}
+        tx_id_to_index = {}
+        for g in tx_groups:
+            idx = g.get("settings", {}).get("index")
+            name = g.get("settings", {}).get("name", f"Tx{idx}")
+            gid = g.get("id")
+            if idx is not None:
+                tx_names[idx] = name
+            if gid is not None and idx is not None:
+                tx_id_to_index[gid] = idx
+
+        # Get video walls from REST API
+        vidwalls = api_client.get_all_vidwalls_detailed()
+
+        result = []
+        for vw in vidwalls:
+            vw_id = vw.get("id")
+            settings = vw.get("settings", {})
+            associations = vw.get("associations", {})
+            status = vw.get("status", {})
+
+            index = settings.get("index", 0)
+
+            # Get current Tx from routing (using the video wall's rx index)
+            current_tx = rx_to_tx.get(index, 0)
+
+            # Also check paired_tx from associations
+            paired_tx_id = associations.get("paired_tx")
+            if paired_tx_id and paired_tx_id in tx_id_to_index:
+                current_tx = tx_id_to_index[paired_tx_id]
+
+            result.append(VideoWall(
+                id=vw_id,
+                index=index,
+                name=settings.get("name", f"Video Wall {index}"),
+                width=settings.get("width", 2),
+                height=settings.get("height", 2),
+                state=status.get("state", "stopped"),
+                current_tx=current_tx if current_tx > 0 else None,
+                current_tx_name=tx_names.get(current_tx) if current_tx > 0 else None
+            ))
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/vidwalls/{vidwall_id}", response_model=VideoWall)
+async def get_video_wall(vidwall_id: int):
+    """Get details for a specific video wall."""
+    api_client = get_api_client()
+    telnet_client = get_telnet_client()
+
+    try:
+        vw = api_client.get_vidwall(vidwall_id)
+
+        # Get routing for current source
+        routing = telnet_client.get_routing()
+        rx_to_tx = {entry.rx: entry.tx for entry in routing}
+
+        # Get Tx names
+        tx_groups = api_client.get_all_group_tx_detailed()
+        tx_names = {}
+        tx_id_to_index = {}
+        for g in tx_groups:
+            idx = g.get("settings", {}).get("index")
+            name = g.get("settings", {}).get("name", f"Tx{idx}")
+            gid = g.get("id")
+            if idx is not None:
+                tx_names[idx] = name
+            if gid is not None and idx is not None:
+                tx_id_to_index[gid] = idx
+
+        settings = vw.get("settings", {})
+        associations = vw.get("associations", {})
+        status = vw.get("status", {})
+
+        index = settings.get("index", 0)
+        current_tx = rx_to_tx.get(index, 0)
+
+        paired_tx_id = associations.get("paired_tx")
+        if paired_tx_id and paired_tx_id in tx_id_to_index:
+            current_tx = tx_id_to_index[paired_tx_id]
+
+        return VideoWall(
+            id=vidwall_id,
+            index=index,
+            name=settings.get("name", f"Video Wall {index}"),
+            width=settings.get("width", 2),
+            height=settings.get("height", 2),
+            state=status.get("state", "stopped"),
+            current_tx=current_tx if current_tx > 0 else None,
+            current_tx_name=tx_names.get(current_tx) if current_tx > 0 else None
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/vidwalls/{vidwall_id}")
+async def update_video_wall(vidwall_id: int, update: VideoWallUpdate):
+    """Update video wall settings (name, layout, source)."""
+    api_client = get_api_client()
+
+    try:
+        # Update name if provided
+        if update.name is not None:
+            api_client.set_vidwall_name(vidwall_id, update.name)
+
+        # Update layout if both width and height provided
+        if update.width is not None and update.height is not None:
+            api_client.set_vidwall_layout(vidwall_id, update.width, update.height)
+
+        # Update source if provided
+        if update.tx is not None:
+            api_client.set_vidwall_source(vidwall_id, update.tx)
+
+        return {"success": True, "vidwall_id": vidwall_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/vidwalls/{vidwall_id}/name")
+async def set_video_wall_name(vidwall_id: int, update: DeviceNameUpdate):
+    """Set video wall name."""
+    api_client = get_api_client()
+
+    try:
+        api_client.set_vidwall_name(vidwall_id, update.name)
+        return {"success": True, "vidwall_id": vidwall_id, "name": update.name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class LayoutUpdate(BaseModel):
+    """Request to update video wall layout."""
+    width: int
+    height: int
+
+
+@router.put("/vidwalls/{vidwall_id}/layout")
+async def set_video_wall_layout(vidwall_id: int, update: LayoutUpdate):
+    """Set video wall layout (grid dimensions)."""
+    api_client = get_api_client()
+
+    try:
+        if update.width < 2 or update.width > 4 or update.height < 2 or update.height > 4:
+            raise HTTPException(status_code=400, detail="Width and height must be between 2 and 4")
+
+        api_client.set_vidwall_layout(vidwall_id, update.width, update.height)
+        return {
+            "success": True,
+            "vidwall_id": vidwall_id,
+            "width": update.width,
+            "height": update.height
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

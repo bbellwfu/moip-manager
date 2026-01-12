@@ -9,6 +9,7 @@ let snapshots = [];
 let videoStats = {};  // Map of tx_id -> video stats
 let receiverVideoSettings = {};  // Map of rx_id -> video settings (resolution, etc.)
 let deviceIcons = {};  // Map of device_type_index -> icon_type
+let videoWalls = {};  // Map of vidwall_id -> video wall config
 let selectedRx = null;
 let editingDevice = null;
 let restoringSnapshotId = null;
@@ -266,6 +267,23 @@ async function setReceiverHdcp(rxId, hdcp) {
     return response.json();
 }
 
+// Video Wall API functions
+async function fetchVideoWalls() {
+    const response = await fetch(`${API_BASE}/vidwalls`);
+    if (!response.ok) throw new Error('Failed to fetch video walls');
+    return response.json();
+}
+
+async function setVideoWallLayout(vidwallId, width, height) {
+    const response = await fetch(`${API_BASE}/vidwalls/${vidwallId}/layout`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ width, height })
+    });
+    if (!response.ok) throw new Error('Failed to set video wall layout');
+    return response.json();
+}
+
 async function switchSource(tx, rx) {
     const response = await fetch(`${API_BASE}/switch`, {
         method: 'POST',
@@ -318,9 +336,10 @@ async function refreshAll() {
         renderReceivers();
         renderTransmitters();
 
-        // Fetch video stats and receiver settings (shows its own activity indicator)
+        // Fetch video stats, receiver settings, and video walls (shows its own activity indicator)
         loadVideoStats();
         loadReceiverVideoSettings();
+        loadVideoWalls();
     } catch (error) {
         console.error('Error refreshing data:', error);
         updateConnectionStatus(false);
@@ -367,6 +386,22 @@ async function loadReceiverVideoSettings() {
         renderReceivers();
     } catch (error) {
         console.error('Error loading receiver video settings:', error);
+    }
+}
+
+// Load video wall configurations
+async function loadVideoWalls() {
+    try {
+        const walls = await fetchVideoWalls();
+        videoWalls = {};
+        for (const wall of walls) {
+            // Map by receiver index for easy lookup
+            videoWalls[wall.index] = wall;
+        }
+        // Re-render receivers to show video wall layout
+        renderReceivers();
+    } catch (error) {
+        console.error('Error loading video walls:', error);
     }
 }
 
@@ -576,9 +611,47 @@ function renderReceivers() {
         }
         quickSelectHtml += '</div>';
 
-        // Build video settings row (resolution + HDCP) - only for AV receivers, not audio-only
+        // Build video settings row - different for AV vs Audio vs VideoWall
         let videoSettingsHtml = '';
-        if (rx.subtype !== 'audio') {
+        if (rx.subtype === 'videowall') {
+            // Video Wall layout selector
+            const wallConfig = videoWalls[rx.id] || {};
+            const currentWidth = wallConfig.width || 2;
+            const currentHeight = wallConfig.height || 2;
+            const currentLayout = `${currentWidth}x${currentHeight}`;
+            const vidwallId = wallConfig.id;
+            const wallState = wallConfig.state || 'stopped';
+
+            videoSettingsHtml = '<div class="receiver-video-settings videowall-settings">';
+
+            // Layout selector
+            videoSettingsHtml += `
+                <div class="video-setting-group">
+                    <label class="video-setting-label">Layout</label>
+                    <select class="video-setting-select" onchange="changeVideoWallLayout(${vidwallId}, this.value)" title="Video Wall Layout" ${vidwallId ? '' : 'disabled'}>
+                        <option value="2x2" ${currentLayout === '2x2' ? 'selected' : ''}>2x2</option>
+                        <option value="3x3" ${currentLayout === '3x3' ? 'selected' : ''}>3x3</option>
+                        <option value="4x4" ${currentLayout === '4x4' ? 'selected' : ''}>4x4</option>
+                        <option value="2x3" ${currentLayout === '2x3' ? 'selected' : ''}>2x3</option>
+                        <option value="3x2" ${currentLayout === '3x2' ? 'selected' : ''}>3x2</option>
+                        <option value="2x4" ${currentLayout === '2x4' ? 'selected' : ''}>2x4</option>
+                        <option value="4x2" ${currentLayout === '4x2' ? 'selected' : ''}>4x2</option>
+                    </select>
+                </div>
+            `;
+
+            // State indicator
+            const stateClass = wallState === 'running' ? 'active' : 'idle';
+            videoSettingsHtml += `
+                <div class="video-setting-group">
+                    <label class="video-setting-label">State</label>
+                    <span class="videowall-state ${stateClass}">${wallState === 'running' ? 'Active' : 'Stopped'}</span>
+                </div>
+            `;
+
+            videoSettingsHtml += '</div>';
+        } else if (rx.subtype !== 'audio') {
+            // Standard AV receiver - resolution + HDCP
             const videoSettings = receiverVideoSettings[rx.id] || {};
             const currentResolution = videoSettings.resolution || 'passthrough';
             const currentHdcp = videoSettings.hdcp || 'passthrough';
@@ -626,18 +699,33 @@ function renderReceivers() {
             videoSettingsHtml += '</div>';
         }
 
-        // Icon for receiver type (TV for AV, speaker for Audio)
-        const rxTypeIcon = rx.subtype === 'audio'
-            ? `<svg class="rx-type-icon audio" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 7.97V16.02C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12S16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12S18.01 4.14 14 3.23Z"/></svg>`
-            : `<svg class="rx-type-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H8V21H16V19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3ZM21 17H3V5H21V17Z"/></svg>`;
+        // Icon for receiver type (TV for AV, speaker for Audio, grid for Video Wall)
+        let rxTypeIcon;
+        if (rx.subtype === 'audio') {
+            rxTypeIcon = `<svg class="rx-type-icon audio" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 7.97V16.02C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12S16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12S18.01 4.14 14 3.23Z"/></svg>`;
+        } else if (rx.subtype === 'videowall') {
+            rxTypeIcon = `<svg class="rx-type-icon videowall" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3H11V11H3V3ZM13 3H21V11H13V3ZM3 13H11V21H3V13ZM13 13H21V21H13V13ZM5 5V9H9V5H5ZM15 5V9H19V5H15ZM5 15V19H9V15H5ZM15 15V19H19V15H15Z"/></svg>`;
+        } else {
+            rxTypeIcon = `<svg class="rx-type-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H8V21H16V19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3ZM21 17H3V5H21V17Z"/></svg>`;
+        }
 
-        // Index badge - shows "Rx4" or "Rx4 Audio" for differentiation
-        const indexBadge = rx.subtype === 'audio'
-            ? `<span class="rx-index-badge audio">Rx${rx.id} Audio</span>`
-            : `<span class="rx-index-badge">Rx${rx.id}</span>`;
+        // Index badge - shows "Rx4", "Rx4 Audio", or "Rx12 Video Wall" for differentiation
+        let indexBadge;
+        if (rx.subtype === 'audio') {
+            indexBadge = `<span class="rx-index-badge audio">Rx${rx.id} Audio</span>`;
+        } else if (rx.subtype === 'videowall') {
+            indexBadge = `<span class="rx-index-badge videowall">Rx${rx.id} Video Wall</span>`;
+        } else {
+            indexBadge = `<span class="rx-index-badge">Rx${rx.id}</span>`;
+        }
+
+        // Card class based on subtype
+        let subtypeClass = '';
+        if (rx.subtype === 'audio') subtypeClass = 'audio-receiver';
+        else if (rx.subtype === 'videowall') subtypeClass = 'videowall-receiver';
 
         const card = document.createElement('div');
-        card.className = `receiver-card ${currentTx > 0 ? 'streaming' : 'no-source'} ${rx.subtype === 'audio' ? 'audio-receiver' : ''}`;
+        card.className = `receiver-card ${currentTx > 0 ? 'streaming' : 'no-source'} ${subtypeClass}`;
         card.innerHTML = `
             <div class="receiver-header">
                 ${indexBadge}
@@ -736,6 +824,34 @@ async function changeHdcp(rxId, hdcp) {
         hideActivity();
         // Reload to get correct state
         loadReceiverVideoSettings();
+    }
+}
+
+// Change video wall layout
+async function changeVideoWallLayout(vidwallId, layoutStr) {
+    const [width, height] = layoutStr.split('x').map(Number);
+
+    // Find video wall by ID
+    const wallEntry = Object.entries(videoWalls).find(([idx, wall]) => wall.id === vidwallId);
+    const wallName = wallEntry ? wallEntry[1].name : `Video Wall`;
+
+    try {
+        showActivity(`Setting ${wallName} to ${layoutStr}...`);
+        await setVideoWallLayout(vidwallId, width, height);
+
+        // Update local state
+        if (wallEntry) {
+            videoWalls[wallEntry[0]].width = width;
+            videoWalls[wallEntry[0]].height = height;
+        }
+
+        hideActivity();
+    } catch (error) {
+        console.error('Error changing video wall layout:', error);
+        alert('Failed to change video wall layout. Please try again.');
+        hideActivity();
+        // Reload to get correct state
+        loadVideoWalls();
     }
 }
 
@@ -1100,7 +1216,7 @@ function renderInventory() {
         } else if (subtype === 'videowall') {
             subtypeBadge = ' <span class="subtype-badge videowall">Video Wall</span>';
         }
-        // Don't show badge for 'av' as it's the default
+        // Don't show badge for 'av' as it's the default (AV)
 
         // Virtual badge takes precedence for display
         const badges = isVirtual ? ' <span class="virtual-badge">Virtual</span>' : subtypeBadge;

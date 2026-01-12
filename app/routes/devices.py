@@ -80,6 +80,10 @@ async def get_all_devices():
         tx_groups = api_client.get_all_group_tx_detailed()
         rx_groups = api_client.get_all_group_rx_detailed()
 
+        # Get unit details for model detection
+        units = api_client.get_all_units_detailed()
+        unit_by_id = {u.get('id'): u for u in units}
+
         # Build name maps from group data
         tx_names = {}
         for g in tx_groups:
@@ -88,31 +92,89 @@ async def get_all_devices():
             if idx is not None:
                 tx_names[idx] = name
 
-        rx_names = {}
-        for g in rx_groups:
-            idx = g.get("settings", {}).get("index")
-            name = g.get("settings", {}).get("name", f"Rx{idx}")
-            if idx is not None:
-                rx_names[idx] = name
+        # Helper to detect device subtype (based on associated unit model)
+        def get_subtype(group):
+            unit_id = group.get('associations', {}).get('unit')
+            if unit_id and unit_id in unit_by_id:
+                model = unit_by_id[unit_id].get('status', {}).get('model', '')
+                if '-a-rx' in model.lower() or '-a-tx' in model.lower():
+                    return 'audio'
+            # TODO: detect videowall when we have better API support
+            return 'av'
 
-        # Build transmitter list
+        # Helper to check if device is online (has valid IP, not 0.0.0.0)
+        def is_online(group):
+            unit_id = group.get('associations', {}).get('unit')
+            if unit_id and unit_id in unit_by_id:
+                ip = unit_by_id[unit_id].get('status', {}).get('ip', '')
+                return ip and ip != '0.0.0.0'
+            return False
+
+        # Build transmitter list from all group_tx entries
+        def tx_sort_key(g):
+            idx = g.get("settings", {}).get("index") or 999
+            subtype = get_subtype(g)
+            subtype_order = 0 if subtype == 'av' else 1
+            return (idx, subtype_order)
+
+        sorted_tx_groups = sorted(tx_groups, key=tx_sort_key)
+
         transmitters = []
-        for i in range(1, counts.tx_count + 1):
-            rx_count = tx_rx_counts.get(i, 0)
+        for group in sorted_tx_groups:
+            idx = group.get("settings", {}).get("index")
+            if idx is None:
+                continue
+
+            name = group.get("settings", {}).get("name", f"Tx{idx}")
+            subtype = get_subtype(group)
+            online = is_online(group)
+            group_id = group.get("id")
+            rx_count = tx_rx_counts.get(idx, 0)
+
             transmitters.append(Transmitter(
-                id=i,
-                name=tx_names.get(i, f"Tx{i}"),
+                id=idx,
+                name=name,
+                subtype=subtype,
+                is_online=online,
+                group_id=group_id,
                 receiver_count=rx_count,
                 status="streaming" if rx_count > 0 else "idle"
             ))
 
-        # Build receiver list
+        # Build receiver list from all group_rx entries (not just one per index)
+        # Sort by index, then by subtype (av first, then audio) for consistent ordering
+        def rx_sort_key(g):
+            idx = g.get("settings", {}).get("index") or 999
+            subtype = get_subtype(g)
+            subtype_order = 0 if subtype == 'av' else 1  # AV first
+            return (idx, subtype_order)
+
+        sorted_rx_groups = sorted(rx_groups, key=rx_sort_key)
+
+        # Track how many devices we've seen at each index (for differentiating duplicates)
+        index_counts = {}
+
         receivers = []
-        for i in range(1, counts.rx_count + 1):
-            current_tx = rx_to_tx.get(i, 0)
+        for group in sorted_rx_groups:
+            idx = group.get("settings", {}).get("index")
+            if idx is None:
+                continue
+
+            name = group.get("settings", {}).get("name", f"Rx{idx}")
+            subtype = get_subtype(group)
+            group_id = group.get("id")
+
+            # Track duplicates at same index
+            if idx not in index_counts:
+                index_counts[idx] = 0
+            index_counts[idx] += 1
+
+            current_tx = rx_to_tx.get(idx, 0)
             receivers.append(Receiver(
-                id=i,
-                name=rx_names.get(i, f"Rx{i}"),
+                id=idx,
+                name=name,
+                subtype=subtype,
+                group_id=group_id,
                 current_tx=current_tx if current_tx > 0 else None,
                 current_tx_name=tx_names.get(current_tx) if current_tx > 0 else None,
                 status="streaming" if current_tx > 0 else "idle"

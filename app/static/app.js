@@ -576,58 +576,74 @@ function renderReceivers() {
         }
         quickSelectHtml += '</div>';
 
-        // Get video settings for this receiver
-        const videoSettings = receiverVideoSettings[rx.id] || {};
-        const currentResolution = videoSettings.resolution || 'passthrough';
-        const currentHdcp = videoSettings.hdcp || 'passthrough';
+        // Build video settings row (resolution + HDCP) - only for AV receivers, not audio-only
+        let videoSettingsHtml = '';
+        if (rx.subtype !== 'audio') {
+            const videoSettings = receiverVideoSettings[rx.id] || {};
+            const currentResolution = videoSettings.resolution || 'passthrough';
+            const currentHdcp = videoSettings.hdcp || 'passthrough';
 
-        // Use supported options from API, or fallback to common defaults
-        const defaultResolutions = ['passthrough', 'uhd2160p60', 'uhd2160p30', 'fhd1080p60', 'fhd1080p30', 'hd720p60'];
-        const defaultHdcp = ['passthrough', 'hdcp14', 'hdcp22'];
-        const supportedResolutions = videoSettings.supported_resolutions?.length > 0
-            ? videoSettings.supported_resolutions
-            : defaultResolutions;
-        const supportedHdcp = videoSettings.supported_hdcp?.length > 0
-            ? videoSettings.supported_hdcp
-            : defaultHdcp;
+            // Use supported options from API, or fallback to common defaults
+            const defaultResolutions = ['passthrough', 'uhd2160p60', 'uhd2160p30', 'fhd1080p60', 'fhd1080p30', 'hd720p60'];
+            const defaultHdcp = ['passthrough', 'hdcp14', 'hdcp22'];
+            const supportedResolutions = videoSettings.supported_resolutions?.length > 0
+                ? videoSettings.supported_resolutions
+                : defaultResolutions;
+            const supportedHdcp = videoSettings.supported_hdcp?.length > 0
+                ? videoSettings.supported_hdcp
+                : defaultHdcp;
 
-        // Build video settings row (resolution + HDCP)
-        let videoSettingsHtml = '<div class="receiver-video-settings">';
+            videoSettingsHtml = '<div class="receiver-video-settings">';
 
-        // Resolution selector
-        videoSettingsHtml += `
-            <div class="video-setting-group">
-                <label class="video-setting-label">Resolution</label>
-                <select class="video-setting-select" onchange="changeResolution(${rx.id}, this.value)" title="Output Resolution">
-                    ${supportedResolutions.map(res => `
-                        <option value="${res}" ${res === currentResolution ? 'selected' : ''}>
-                            ${formatResolutionLabel(res)}
-                        </option>
-                    `).join('')}
-                </select>
-            </div>
-        `;
+            // Resolution selector
+            videoSettingsHtml += `
+                <div class="video-setting-group">
+                    <label class="video-setting-label">Resolution</label>
+                    <select class="video-setting-select" onchange="changeResolution(${rx.id}, this.value)" title="Output Resolution">
+                        ${supportedResolutions.map(res => `
+                            <option value="${res}" ${res === currentResolution ? 'selected' : ''}>
+                                ${formatResolutionLabel(res)}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            `;
 
-        // HDCP selector
-        videoSettingsHtml += `
-            <div class="video-setting-group">
-                <label class="video-setting-label">HDCP</label>
-                <select class="video-setting-select" onchange="changeHdcp(${rx.id}, this.value)" title="HDCP Mode">
-                    ${supportedHdcp.map(mode => `
-                        <option value="${mode}" ${mode === currentHdcp ? 'selected' : ''}>
-                            ${formatHdcpLabel(mode)}
-                        </option>
-                    `).join('')}
-                </select>
-            </div>
-        `;
+            // HDCP selector
+            videoSettingsHtml += `
+                <div class="video-setting-group">
+                    <label class="video-setting-label">HDCP</label>
+                    <select class="video-setting-select" onchange="changeHdcp(${rx.id}, this.value)" title="HDCP Mode">
+                        ${supportedHdcp.map(mode => `
+                            <option value="${mode}" ${mode === currentHdcp ? 'selected' : ''}>
+                                ${formatHdcpLabel(mode)}
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            `;
 
-        videoSettingsHtml += '</div>';
+            videoSettingsHtml += '</div>';
+        }
+
+        // Icon for receiver type (TV for AV, speaker for Audio)
+        const rxTypeIcon = rx.subtype === 'audio'
+            ? `<svg class="rx-type-icon audio" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 7.97V16.02C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12S16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12S18.01 4.14 14 3.23Z"/></svg>`
+            : `<svg class="rx-type-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3H3C1.9 3 1 3.9 1 5V17C1 18.1 1.9 19 3 19H8V21H16V19H21C22.1 19 23 18.1 23 17V5C23 3.9 22.1 3 21 3ZM21 17H3V5H21V17Z"/></svg>`;
+
+        // Index badge - shows "Rx4" or "Rx4 Audio" for differentiation
+        const indexBadge = rx.subtype === 'audio'
+            ? `<span class="rx-index-badge audio">Rx${rx.id} Audio</span>`
+            : `<span class="rx-index-badge">Rx${rx.id}</span>`;
 
         const card = document.createElement('div');
-        card.className = `receiver-card ${currentTx > 0 ? 'streaming' : 'no-source'}`;
+        card.className = `receiver-card ${currentTx > 0 ? 'streaming' : 'no-source'} ${rx.subtype === 'audio' ? 'audio-receiver' : ''}`;
         card.innerHTML = `
+            <div class="receiver-header">
+                ${indexBadge}
+            </div>
             <div class="receiver-name" onclick="editName('rx', ${rx.id}, '${escapeHtml(rx.name)}')">
+                ${rxTypeIcon}
                 ${escapeHtml(rx.name)}
                 <span class="edit-icon">&#9998;</span>
             </div>
@@ -758,11 +774,11 @@ function renderTransmitters() {
         return { ...tx, rxCount, isActive: rxCount > 0 };
     });
 
-    // Apply filter
+    // Apply filter (use is_online for actual hardware status)
     if (filterBy === 'online') {
-        txList = txList.filter(tx => tx.isActive);
+        txList = txList.filter(tx => tx.is_online !== false);
     } else if (filterBy === 'offline') {
-        txList = txList.filter(tx => !tx.isActive);
+        txList = txList.filter(tx => tx.is_online === false);
     }
 
     // Apply sort
@@ -809,15 +825,32 @@ function renderTransmitters() {
             }
         }
 
+        // Determine indicator status: offline (red), streaming (green), idle (gray)
+        const isOffline = tx.is_online === false;
+        const indicatorClass = isOffline ? 'offline' : (tx.isActive ? 'active' : 'inactive');
+
+        // Audio badge for audio-only transmitters
+        const audioBadge = tx.subtype === 'audio' ? '<span class="tx-audio-badge">Audio</span>' : '';
+
+        // Status text
+        let statusText;
+        if (isOffline) {
+            statusText = 'Offline';
+        } else if (tx.isActive) {
+            statusText = `Streaming to ${tx.rxCount} receiver${tx.rxCount > 1 ? 's' : ''}`;
+        } else {
+            statusText = 'Idle';
+        }
+
         row.innerHTML = `
-            <div class="tx-indicator ${tx.isActive ? 'active' : 'inactive'}"></div>
+            <div class="tx-indicator ${indicatorClass}"></div>
             <span class="tx-name" onclick="editName('tx', ${tx.id}, '${escapeHtml(tx.name)}')">
-                Tx${tx.id}: ${escapeHtml(tx.name)}
+                Tx${tx.id}: ${escapeHtml(tx.name)} ${audioBadge}
             </span>
             ${statsHtml}
             <button class="tx-preview-btn" onclick="openPreviewModal(${tx.id}, '${escapeHtml(tx.name)}'); event.stopPropagation();">Preview</button>
-            <span class="tx-status">
-                ${tx.isActive ? `Streaming to ${tx.rxCount} receiver${tx.rxCount > 1 ? 's' : ''}` : 'Idle'}
+            <span class="tx-status ${isOffline ? 'offline' : ''}">
+                ${statusText}
             </span>
         `;
         list.appendChild(row);
@@ -1059,8 +1092,21 @@ function renderInventory() {
 
         if (isVirtual) hasVirtualDevices = true;
 
+        // Build subtype badge
+        let subtypeBadge = '';
+        const subtype = device.subtype || 'av';
+        if (subtype === 'audio') {
+            subtypeBadge = ' <span class="subtype-badge audio">Audio</span>';
+        } else if (subtype === 'videowall') {
+            subtypeBadge = ' <span class="subtype-badge videowall">Video Wall</span>';
+        }
+        // Don't show badge for 'av' as it's the default
+
+        // Virtual badge takes precedence for display
+        const badges = isVirtual ? ' <span class="virtual-badge">Virtual</span>' : subtypeBadge;
+
         row.innerHTML = `
-            <td class="${typeClass}">${device.device_type.toUpperCase()}${isVirtual ? ' <span class="virtual-badge">Virtual</span>' : ''}</td>
+            <td class="${typeClass}">${device.device_type.toUpperCase()}${badges}</td>
             <td>${device.device_index}</td>
             <td>${escapeHtml(device.name || '-')}</td>
             <td>${escapeHtml(device.model || '-')}</td>

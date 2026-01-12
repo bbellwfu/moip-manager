@@ -19,6 +19,8 @@ class Transmitter(BaseModel):
     unit_id: Optional[int] = Field(default=None, description="API unit ID")
     group_id: Optional[int] = Field(default=None, description="API group_tx ID")
     status: str = Field(default="unknown", description="Device status")
+    subtype: str = Field(default="av", description="Device subtype: av or audio")
+    is_online: bool = Field(default=False, description="Whether device has valid IP (is powered on)")
     receiver_count: int = Field(default=0, description="Number of receivers streaming from this Tx")
 
 
@@ -32,6 +34,7 @@ class Receiver(BaseModel):
     unit_id: Optional[int] = Field(default=None, description="API unit ID")
     group_id: Optional[int] = Field(default=None, description="API group_rx ID")
     status: str = Field(default="unknown", description="Device status")
+    subtype: str = Field(default="av", description="Device subtype: av, audio, or videowall")
     current_tx: Optional[int] = Field(default=None, description="Currently assigned transmitter (0 = unassigned)")
     current_tx_name: Optional[str] = Field(default=None, description="Name of current transmitter")
 

@@ -9,6 +9,36 @@ from app import database as db
 logger = logging.getLogger(__name__)
 
 
+def determine_subtype(group: dict, model: str = None) -> str:
+    """
+    Determine device subtype (av, audio, videowall) from group settings or model.
+
+    Binary MoIP has different device types:
+    - AV: Full audio/video receivers/transmitters (e.g., B-900-MOIP-4K-RX)
+    - Audio: Audio-only extractors (e.g., B-900-MOIP-A-RX)
+    - Video Wall: Logical video wall groupings
+    """
+    # Check group type field if available
+    group_type = group.get('settings', {}).get('type', '').lower()
+    if 'video' in group_type and 'wall' in group_type:
+        return 'videowall'
+    if group_type == 'audio':
+        return 'audio'
+    if group_type == 'av':
+        return 'av'
+
+    # Fall back to model name detection
+    if model:
+        model_lower = model.lower()
+        if '-a-rx' in model_lower or '-a-tx' in model_lower:
+            return 'audio'
+        if 'wall' in model_lower:
+            return 'videowall'
+
+    # Default to AV
+    return 'av'
+
+
 def sync_devices():
     """
     Sync all device information from the controller to the local database.
@@ -40,11 +70,11 @@ def sync_devices():
         # Process transmitters
         for group in tx_groups:
             idx = group.get('settings', {}).get('index')
-            if idx is None:
+            group_id = group.get('id')
+            if idx is None or group_id is None:
                 continue
 
             name = group.get('settings', {}).get('name')
-            group_id = group.get('id')
             unit_id = group.get('associations', {}).get('unit')
 
             # Get unit details if available
@@ -55,28 +85,31 @@ def sync_devices():
                 ip = unit.get('status', {}).get('ip')
                 model = unit.get('status', {}).get('model')
                 firmware = unit.get('status', {}).get('firmware')
+
+            subtype = determine_subtype(group, model)
 
             db.upsert_device(
                 device_type='tx',
                 device_index=idx,
+                group_id=group_id,
+                subtype=subtype,
                 name=name,
                 mac_address=mac,
                 ip_address=ip,
                 model=model,
                 firmware=firmware,
-                unit_id=unit_id,
-                group_id=group_id
+                unit_id=unit_id
             )
-            logger.debug(f"Synced Tx{idx}: {name}")
+            logger.debug(f"Synced Tx{idx} ({subtype}): {name}")
 
         # Process receivers
         for group in rx_groups:
             idx = group.get('settings', {}).get('index')
-            if idx is None:
+            group_id = group.get('id')
+            if idx is None or group_id is None:
                 continue
 
             name = group.get('settings', {}).get('name')
-            group_id = group.get('id')
             unit_id = group.get('associations', {}).get('unit')
 
             # Get unit details if available
@@ -88,18 +121,21 @@ def sync_devices():
                 model = unit.get('status', {}).get('model')
                 firmware = unit.get('status', {}).get('firmware')
 
+            subtype = determine_subtype(group, model)
+
             db.upsert_device(
                 device_type='rx',
                 device_index=idx,
+                group_id=group_id,
+                subtype=subtype,
                 name=name,
                 mac_address=mac,
                 ip_address=ip,
                 model=model,
                 firmware=firmware,
-                unit_id=unit_id,
-                group_id=group_id
+                unit_id=unit_id
             )
-            logger.debug(f"Synced Rx{idx}: {name}")
+            logger.debug(f"Synced Rx{idx} ({subtype}): {name}")
 
         logger.info("Device sync completed successfully")
         return True

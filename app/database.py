@@ -37,6 +37,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 device_type TEXT NOT NULL,  -- 'tx' or 'rx'
                 device_index INTEGER NOT NULL,  -- The TX/RX number (1-based)
+                subtype TEXT DEFAULT 'av',  -- 'av', 'audio', 'videowall' for receivers; 'av', 'audio' for transmitters
                 name TEXT,
                 icon_type TEXT,  -- Icon identifier (e.g., 'apple', 'roku', 'gaming', etc.)
                 mac_address TEXT,
@@ -44,11 +45,10 @@ def init_db():
                 model TEXT,
                 firmware TEXT,
                 unit_id INTEGER,  -- REST API unit ID
-                group_id INTEGER,  -- REST API group_tx/group_rx ID
+                group_id INTEGER UNIQUE,  -- REST API group_tx/group_rx ID (unique identifier)
                 last_seen TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(device_type, device_index)
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             -- Config snapshots: point-in-time routing and device names
@@ -77,22 +77,26 @@ def init_db():
 def upsert_device(
     device_type: str,
     device_index: int,
+    group_id: int,
+    subtype: str = 'av',
     name: Optional[str] = None,
     icon_type: Optional[str] = None,
     mac_address: Optional[str] = None,
     ip_address: Optional[str] = None,
     model: Optional[str] = None,
     firmware: Optional[str] = None,
-    unit_id: Optional[int] = None,
-    group_id: Optional[int] = None
+    unit_id: Optional[int] = None
 ):
-    """Insert or update a device record."""
+    """Insert or update a device record. Uses group_id as unique key."""
     with get_db() as conn:
         conn.execute("""
-            INSERT INTO devices (device_type, device_index, name, icon_type, mac_address, ip_address,
+            INSERT INTO devices (device_type, device_index, subtype, name, icon_type, mac_address, ip_address,
                                  model, firmware, unit_id, group_id, last_seen, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT(device_type, device_index) DO UPDATE SET
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(group_id) DO UPDATE SET
+                device_type = excluded.device_type,
+                device_index = excluded.device_index,
+                subtype = excluded.subtype,
                 name = COALESCE(excluded.name, devices.name),
                 icon_type = COALESCE(excluded.icon_type, devices.icon_type),
                 mac_address = COALESCE(excluded.mac_address, devices.mac_address),
@@ -100,10 +104,9 @@ def upsert_device(
                 model = COALESCE(excluded.model, devices.model),
                 firmware = COALESCE(excluded.firmware, devices.firmware),
                 unit_id = COALESCE(excluded.unit_id, devices.unit_id),
-                group_id = COALESCE(excluded.group_id, devices.group_id),
                 last_seen = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-        """, (device_type, device_index, name, icon_type, mac_address, ip_address,
+        """, (device_type, device_index, subtype, name, icon_type, mac_address, ip_address,
               model, firmware, unit_id, group_id))
 
 
@@ -245,11 +248,17 @@ def set_settings(settings: dict) -> None:
 def migrate_db():
     """Run database migrations."""
     with get_db() as conn:
-        # Check if icon_type column exists
+        # Check existing columns
         cursor = conn.execute("PRAGMA table_info(devices)")
         columns = [row[1] for row in cursor.fetchall()]
+
+        # Add icon_type column if missing
         if 'icon_type' not in columns:
             conn.execute("ALTER TABLE devices ADD COLUMN icon_type TEXT")
+
+        # Add subtype column if missing (for AV/Audio/VideoWall distinction)
+        if 'subtype' not in columns:
+            conn.execute("ALTER TABLE devices ADD COLUMN subtype TEXT DEFAULT 'av'")
 
 
 # Initialize database on module import

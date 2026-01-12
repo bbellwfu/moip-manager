@@ -681,6 +681,23 @@ async def set_receiver_hdcp(rx_id: int, update: HdcpUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/receivers/video/cached")
+async def get_cached_receiver_video_settings():
+    """Get cached video settings for all receivers (from local database)."""
+    cached = db.get_cached_receiver_video_settings()
+    # Convert to list format matching the live endpoint
+    settings = [
+        {
+            "rx_id": rx_id,
+            "resolution": data.get("resolution"),
+            "hdcp": data.get("hdcp"),
+            "cached": True
+        }
+        for rx_id, data in cached.items()
+    ]
+    return {"settings": settings}
+
+
 @router.get("/receivers/video/all")
 async def get_all_receiver_video_settings():
     """Get video settings for all receivers."""
@@ -704,11 +721,21 @@ async def get_all_receiver_video_settings():
                 settings = video_data.get("settings", {})
                 status = video_data.get("status", {})
 
+                resolution = settings.get("resolution")
+                hdcp = settings.get("hdcp")
+
+                # Cache the settings in the database for fast loading next time
+                if resolution and hdcp:
+                    try:
+                        db.cache_receiver_video_settings(rx_id, resolution, hdcp)
+                    except Exception:
+                        pass  # Don't fail on cache error
+
                 return {
                     "rx_id": rx_id,
-                    "resolution": settings.get("resolution"),
+                    "resolution": resolution,
                     "supported_resolutions": settings.get("supported_resolution", []),
-                    "hdcp": settings.get("hdcp"),
+                    "hdcp": hdcp,
                     "supported_hdcp": settings.get("supported_hdcp", []),
                     "state": status.get("state")
                 }

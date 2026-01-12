@@ -479,6 +479,49 @@ section h2 {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+/* Loading state for video settings */
+.receiver-video-settings.loading {
+    opacity: 0.7;
+}
+
+.receiver-video-settings.loading .video-setting-select {
+    background: #f8fafc;
+    color: var(--text-muted);
+    cursor: wait;
+    border-style: dashed;
+}
+
+.videowall-state.loading {
+    background: #f1f5f9;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Loading message for empty grids */
+.loading-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    grid-column: 1 / -1;  /* Span all columns in a grid */
+}
+
+.loading-spinner {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 .more-sources-link {
     display: block;
     text-align: right;

@@ -8,8 +8,10 @@ let inventory = { transmitters: [], receivers: [] };
 let snapshots = [];
 let videoStats = {};  // Map of tx_id -> video stats
 let receiverVideoSettings = {};  // Map of rx_id -> video settings (resolution, etc.)
+let receiverVideoSettingsLoaded = false;  // Whether receiver video settings have been loaded
 let deviceIcons = {};  // Map of device_type_index -> icon_type
 let videoWalls = {};  // Map of vidwall_id -> video wall config
+let videoWallsLoaded = false;  // Whether video walls have been loaded
 let selectedRx = null;
 let editingDevice = null;
 let restoringSnapshotId = null;
@@ -60,6 +62,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Set initial hash for dashboard
         history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
     }
+
+    // Show loading state immediately (before data loads)
+    renderReceivers();
+    renderTransmitters();
 
     refreshAll();
     // Note: Auto-refresh is now controlled by settings (applyAppSettings)
@@ -247,6 +253,12 @@ async function fetchReceiverVideoSettings() {
     return response.json();
 }
 
+async function fetchCachedReceiverVideoSettings() {
+    const response = await fetch(`${API_BASE}/receivers/video/cached`);
+    if (!response.ok) throw new Error('Failed to fetch cached receiver video settings');
+    return response.json();
+}
+
 async function setReceiverResolution(rxId, resolution) {
     const response = await fetch(`${API_BASE}/receivers/${rxId}/resolution`, {
         method: 'PUT',
@@ -319,17 +331,31 @@ async function refreshAll() {
     try {
         showActivity('Loading devices...');
 
-        const [devicesData, routingData, statusData, iconsData] = await Promise.all([
+        // Reset loaded flags - settings will show as loading until fetched
+        receiverVideoSettingsLoaded = false;
+        videoWallsLoaded = false;
+
+        const [devicesData, routingData, statusData, iconsData, cachedVideoSettings] = await Promise.all([
             fetchDevices(),
             fetchRouting(),
             fetchStatus(),
-            fetchDeviceIcons().catch(() => ({}))  // Don't fail if icons can't be loaded
+            fetchDeviceIcons().catch(() => ({})),  // Don't fail if icons can't be loaded
+            fetchCachedReceiverVideoSettings().catch(() => ({ settings: [] }))  // Load cached settings
         ]);
 
         transmitters = devicesData.transmitters;
         receivers = devicesData.receivers;
         routing = routingData;
         deviceIcons = iconsData;
+
+        // Apply cached video settings immediately (so dropdowns show last known values)
+        for (const setting of cachedVideoSettings.settings) {
+            receiverVideoSettings[setting.rx_id] = {
+                resolution: setting.resolution,
+                hdcp: setting.hdcp,
+                cached: true  // Mark as cached so we know it's not live
+            };
+        }
 
         updateConnectionStatus(statusData.connected);
         updateStatusBar(statusData);
@@ -382,10 +408,13 @@ async function loadReceiverVideoSettings() {
         for (const setting of data.settings) {
             receiverVideoSettings[setting.rx_id] = setting;
         }
+        receiverVideoSettingsLoaded = true;
         // Re-render receivers to show resolution
         renderReceivers();
     } catch (error) {
         console.error('Error loading receiver video settings:', error);
+        receiverVideoSettingsLoaded = true;  // Mark as loaded even on error to show defaults
+        renderReceivers();
     }
 }
 
@@ -398,10 +427,13 @@ async function loadVideoWalls() {
             // Map by receiver index for easy lookup
             videoWalls[wall.index] = wall;
         }
+        videoWallsLoaded = true;
         // Re-render receivers to show video wall layout
         renderReceivers();
     } catch (error) {
         console.error('Error loading video walls:', error);
+        videoWallsLoaded = true;  // Mark as loaded even on error
+        renderReceivers();
     }
 }
 
@@ -573,6 +605,17 @@ function renderReceivers() {
     const grid = document.getElementById('receivers-grid');
     grid.innerHTML = '';
 
+    // Show loading message if receivers haven't loaded yet
+    if (receivers.length === 0) {
+        grid.innerHTML = `
+            <div class="loading-message">
+                <div class="loading-spinner"></div>
+                <span>Loading receivers...</span>
+            </div>
+        `;
+        return;
+    }
+
     // Sort receivers by ID
     const sortedReceivers = [...receivers].sort((a, b) => a.id - b.id);
 
@@ -614,47 +657,66 @@ function renderReceivers() {
         // Build video settings row - different for AV vs Audio vs VideoWall
         let videoSettingsHtml = '';
         if (rx.subtype === 'videowall') {
-            // Video Wall layout selector
-            const wallConfig = videoWalls[rx.id] || {};
-            const currentWidth = wallConfig.width || 2;
-            const currentHeight = wallConfig.height || 2;
-            const currentLayout = `${currentWidth}x${currentHeight}`;
-            const vidwallId = wallConfig.id;
-            const wallState = wallConfig.state || 'stopped';
+            // Video Wall layout selector - show loading state if not loaded
+            if (!videoWallsLoaded) {
+                videoSettingsHtml = `
+                    <div class="receiver-video-settings videowall-settings loading">
+                        <div class="video-setting-group">
+                            <label class="video-setting-label">Layout</label>
+                            <select class="video-setting-select" disabled="disabled">
+                                <option>Loading...</option>
+                            </select>
+                        </div>
+                        <div class="video-setting-group">
+                            <label class="video-setting-label">State</label>
+                            <span class="videowall-state loading">...</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const wallConfig = videoWalls[rx.id] || {};
+                const currentWidth = wallConfig.width || 2;
+                const currentHeight = wallConfig.height || 2;
+                const currentLayout = `${currentWidth}x${currentHeight}`;
+                const vidwallId = wallConfig.id;
+                const wallState = wallConfig.state || 'stopped';
 
-            videoSettingsHtml = '<div class="receiver-video-settings videowall-settings">';
+                videoSettingsHtml = '<div class="receiver-video-settings videowall-settings">';
 
-            // Layout selector
-            videoSettingsHtml += `
-                <div class="video-setting-group">
-                    <label class="video-setting-label">Layout</label>
-                    <select class="video-setting-select" onchange="changeVideoWallLayout(${vidwallId}, this.value)" title="Video Wall Layout" ${vidwallId ? '' : 'disabled'}>
-                        <option value="2x2" ${currentLayout === '2x2' ? 'selected' : ''}>2x2</option>
-                        <option value="3x3" ${currentLayout === '3x3' ? 'selected' : ''}>3x3</option>
-                        <option value="4x4" ${currentLayout === '4x4' ? 'selected' : ''}>4x4</option>
-                        <option value="2x3" ${currentLayout === '2x3' ? 'selected' : ''}>2x3</option>
-                        <option value="3x2" ${currentLayout === '3x2' ? 'selected' : ''}>3x2</option>
-                        <option value="2x4" ${currentLayout === '2x4' ? 'selected' : ''}>2x4</option>
-                        <option value="4x2" ${currentLayout === '4x2' ? 'selected' : ''}>4x2</option>
-                    </select>
-                </div>
-            `;
+                // Layout selector
+                videoSettingsHtml += `
+                    <div class="video-setting-group">
+                        <label class="video-setting-label">Layout</label>
+                        <select class="video-setting-select" onchange="changeVideoWallLayout(${vidwallId}, this.value)" title="Video Wall Layout" ${vidwallId ? '' : 'disabled'}>
+                            <option value="2x2" ${currentLayout === '2x2' ? 'selected' : ''}>2x2</option>
+                            <option value="3x3" ${currentLayout === '3x3' ? 'selected' : ''}>3x3</option>
+                            <option value="4x4" ${currentLayout === '4x4' ? 'selected' : ''}>4x4</option>
+                            <option value="2x3" ${currentLayout === '2x3' ? 'selected' : ''}>2x3</option>
+                            <option value="3x2" ${currentLayout === '3x2' ? 'selected' : ''}>3x2</option>
+                            <option value="2x4" ${currentLayout === '2x4' ? 'selected' : ''}>2x4</option>
+                            <option value="4x2" ${currentLayout === '4x2' ? 'selected' : ''}>4x2</option>
+                        </select>
+                    </div>
+                `;
 
-            // State indicator
-            const stateClass = wallState === 'running' ? 'active' : 'idle';
-            videoSettingsHtml += `
-                <div class="video-setting-group">
-                    <label class="video-setting-label">State</label>
-                    <span class="videowall-state ${stateClass}">${wallState === 'running' ? 'Active' : 'Stopped'}</span>
-                </div>
-            `;
+                // State indicator
+                const stateClass = wallState === 'running' ? 'active' : 'idle';
+                videoSettingsHtml += `
+                    <div class="video-setting-group">
+                        <label class="video-setting-label">State</label>
+                        <span class="videowall-state ${stateClass}">${wallState === 'running' ? 'Active' : 'Stopped'}</span>
+                    </div>
+                `;
 
-            videoSettingsHtml += '</div>';
+                videoSettingsHtml += '</div>';
+            }
         } else if (rx.subtype !== 'audio') {
             // Standard AV receiver - resolution + HDCP
             const videoSettings = receiverVideoSettings[rx.id] || {};
             const currentResolution = videoSettings.resolution || 'passthrough';
             const currentHdcp = videoSettings.hdcp || 'passthrough';
+            const isCached = videoSettings.cached === true;
+            const isLoading = !receiverVideoSettingsLoaded;
 
             // Use supported options from API, or fallback to common defaults
             const defaultResolutions = ['passthrough', 'uhd2160p60', 'uhd2160p30', 'fhd1080p60', 'fhd1080p30', 'hd720p60'];
@@ -666,35 +728,61 @@ function renderReceivers() {
                 ? videoSettings.supported_hdcp
                 : defaultHdcp;
 
-            videoSettingsHtml = '<div class="receiver-video-settings">';
+            // Show loading class if still loading (even with cached values)
+            const loadingClass = isLoading ? 'loading' : '';
+            const disabledAttr = isLoading ? 'disabled="disabled"' : '';
 
-            // Resolution selector
-            videoSettingsHtml += `
-                <div class="video-setting-group">
-                    <label class="video-setting-label">Resolution</label>
-                    <select class="video-setting-select" onchange="changeResolution(${rx.id}, this.value)" title="Output Resolution">
-                        ${supportedResolutions.map(res => `
-                            <option value="${res}" ${res === currentResolution ? 'selected' : ''}>
-                                ${formatResolutionLabel(res)}
-                            </option>
-                        `).join('')}
-                    </select>
-                </div>
-            `;
+            videoSettingsHtml = `<div class="receiver-video-settings ${loadingClass}">`;
 
-            // HDCP selector
-            videoSettingsHtml += `
-                <div class="video-setting-group">
-                    <label class="video-setting-label">HDCP</label>
-                    <select class="video-setting-select" onchange="changeHdcp(${rx.id}, this.value)" title="HDCP Mode">
-                        ${supportedHdcp.map(mode => `
-                            <option value="${mode}" ${mode === currentHdcp ? 'selected' : ''}>
-                                ${formatHdcpLabel(mode)}
-                            </option>
-                        `).join('')}
-                    </select>
-                </div>
-            `;
+            // Resolution selector - show cached value if available, otherwise "Loading..."
+            if (isLoading && !videoSettings.resolution) {
+                videoSettingsHtml += `
+                    <div class="video-setting-group">
+                        <label class="video-setting-label">Resolution</label>
+                        <select class="video-setting-select" disabled="disabled">
+                            <option>Loading...</option>
+                        </select>
+                    </div>
+                `;
+            } else {
+                videoSettingsHtml += `
+                    <div class="video-setting-group">
+                        <label class="video-setting-label">Resolution</label>
+                        <select class="video-setting-select" onchange="changeResolution(${rx.id}, this.value)" title="Output Resolution" ${disabledAttr}>
+                            ${supportedResolutions.map(res => `
+                                <option value="${res}" ${res === currentResolution ? 'selected' : ''}>
+                                    ${formatResolutionLabel(res)}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+
+            // HDCP selector - show cached value if available, otherwise "Loading..."
+            if (isLoading && !videoSettings.hdcp) {
+                videoSettingsHtml += `
+                    <div class="video-setting-group">
+                        <label class="video-setting-label">HDCP</label>
+                        <select class="video-setting-select" disabled="disabled">
+                            <option>Loading...</option>
+                        </select>
+                    </div>
+                `;
+            } else {
+                videoSettingsHtml += `
+                    <div class="video-setting-group">
+                        <label class="video-setting-label">HDCP</label>
+                        <select class="video-setting-select" onchange="changeHdcp(${rx.id}, this.value)" title="HDCP Mode" ${disabledAttr}>
+                            ${supportedHdcp.map(mode => `
+                                <option value="${mode}" ${mode === currentHdcp ? 'selected' : ''}>
+                                    ${formatHdcpLabel(mode)}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                `;
+            }
 
             videoSettingsHtml += '</div>';
         }
@@ -876,6 +964,17 @@ async function quickSwitch(txId, rxId) {
 function renderTransmitters() {
     const list = document.getElementById('transmitters-list');
     list.innerHTML = '';
+
+    // Show loading message if transmitters haven't loaded yet
+    if (transmitters.length === 0) {
+        list.innerHTML = `
+            <div class="loading-message">
+                <div class="loading-spinner"></div>
+                <span>Loading transmitters...</span>
+            </div>
+        `;
+        return;
+    }
 
     // Get sort and filter values
     const sortBy = document.getElementById('tx-sort')?.value || 'id';

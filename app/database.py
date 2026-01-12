@@ -260,6 +260,40 @@ def migrate_db():
         if 'subtype' not in columns:
             conn.execute("ALTER TABLE devices ADD COLUMN subtype TEXT DEFAULT 'av'")
 
+        # Add resolution and hdcp columns for receiver video settings cache
+        if 'resolution' not in columns:
+            conn.execute("ALTER TABLE devices ADD COLUMN resolution TEXT")
+
+        if 'hdcp' not in columns:
+            conn.execute("ALTER TABLE devices ADD COLUMN hdcp TEXT")
+
+
+# --- Receiver Video Settings Cache ---
+
+def cache_receiver_video_settings(rx_index: int, resolution: str, hdcp: str) -> None:
+    """Cache receiver video settings (resolution, HDCP) for quick loading."""
+    with get_db() as conn:
+        conn.execute("""
+            UPDATE devices SET resolution = ?, hdcp = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE device_type = 'rx' AND device_index = ?
+        """, (resolution, hdcp, rx_index))
+
+
+def get_cached_receiver_video_settings() -> dict:
+    """Get cached video settings for all receivers as {rx_id: {resolution, hdcp}}."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT device_index, resolution, hdcp FROM devices
+            WHERE device_type = 'rx' AND (resolution IS NOT NULL OR hdcp IS NOT NULL)
+        """).fetchall()
+        return {
+            row['device_index']: {
+                'resolution': row['resolution'],
+                'hdcp': row['hdcp']
+            }
+            for row in rows
+        }
+
 
 # Initialize database on module import
 init_db()

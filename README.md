@@ -2,6 +2,8 @@
 
 A web-based management interface for Binary MoIP 4K video distribution systems. Control your AV-over-IP matrix from any browser with an intuitive dashboard.
 
+![MoIP Manager Dashboard](docs/images/dashboard.png)
+
 ## Features
 
 - **Dashboard View**: Visual grid of all receivers with current source assignments

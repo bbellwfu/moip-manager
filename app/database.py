@@ -1,13 +1,42 @@
 """SQLite database for MoIP Manager local storage."""
 import sqlite3
 import json
+import sys
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from contextlib import contextmanager
 
-# Database file location
-DB_PATH = Path(__file__).parent.parent / "moip.db"
+# Application name for user data directory
+APP_NAME = "MoIP Manager"
+
+
+def get_user_data_dir() -> Path:
+    """Get the platform-appropriate user data directory."""
+    if sys.platform == "darwin":
+        # macOS: ~/Library/Application Support/MoIP Manager/
+        base = Path.home() / "Library" / "Application Support"
+    elif sys.platform == "win32":
+        # Windows: %APPDATA%/MoIP Manager/
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        # Linux/other: ~/.local/share/moip-manager/
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        return base / "moip-manager"
+
+    return base / APP_NAME
+
+
+def get_db_path() -> Path:
+    """Get the database file path, creating the directory if needed."""
+    data_dir = get_user_data_dir()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir / "moip.db"
+
+
+# Database file location (in user data directory for persistence across updates)
+DB_PATH = get_db_path()
 
 
 def get_connection() -> sqlite3.Connection:

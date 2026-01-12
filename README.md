@@ -15,33 +15,55 @@ A web-based management interface for Binary MoIP 4K video distribution systems. 
 
 ## Requirements
 
-- Python 3.10 or higher
 - Binary MoIP Controller (B-900-MOIP-4K-CTRL) with firmware 4.5.x or compatible
 - Network access to the MoIP controller (Telnet port 23 and HTTPS port 443)
+- **For desktop app**: macOS 10.15+ or Windows 10+
+- **For development**: Python 3.10 or higher
 
 ## Installation
 
-### 1. Clone the Repository
+### Option 1: Download Desktop App (Recommended)
+
+The easiest way to get started - no Python or development tools required.
+
+1. Go to the [Releases](https://github.com/bbellwfu/moip-manager/releases) page
+2. Download the latest version for your platform:
+   - **macOS**: `MoIP-Manager-vX.X.X-mac.dmg`
+   - **Windows**: `MoIP-Manager-vX.X.X-win.zip`
+3. Install and run:
+   - **macOS**: Open the DMG, drag to Applications, double-click to launch
+   - **Windows**: Extract the ZIP, run `MoIP Manager.exe`
+4. Your browser will automatically open to the MoIP Manager interface
+
+**Data Location**: Your settings and snapshots are stored in:
+- macOS: `~/Library/Application Support/MoIP Manager/`
+- Windows: `%APPDATA%\MoIP Manager\`
+
+These files persist across app updates.
+
+### Option 2: Run from Source (For Developers)
+
+#### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/moip_manager.git
+git clone https://github.com/bbellwfu/moip-manager.git
 cd moip_manager
 ```
 
-### 2. Create Virtual Environment
+#### 2. Create Virtual Environment
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-### 3. Install Dependencies
+#### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment (Optional)
+#### 4. Configure Environment (Optional)
 
 Copy the example environment file and edit it with your controller details:
 
@@ -59,7 +81,7 @@ MOIP_API_PASSWORD=your_password
 
 **Note**: You can also configure these settings through the web UI after starting the application.
 
-### 5. Run the Application
+#### 5. Run the Application
 
 ```bash
 python run.py
@@ -106,6 +128,7 @@ View detailed device information synced from the controller, including:
 moip_manager/
 ├── app/                    # FastAPI web application
 │   ├── main.py            # Application entry point
+│   ├── database.py        # SQLite database for local storage
 │   ├── routes/            # API endpoints
 │   │   ├── devices.py     # Device and routing endpoints
 │   │   ├── switching.py   # Source switching endpoints
@@ -118,6 +141,11 @@ moip_manager/
 │   ├── client.py          # Telnet client
 │   ├── api_client.py      # REST API client
 │   └── models.py          # Data models
+├── packaging/             # Desktop app packaging
+│   ├── moip-manager.spec  # PyInstaller configuration
+│   └── icons/             # App icons for macOS/Windows
+├── .github/workflows/     # CI/CD
+│   └── release.yml        # Build and release automation
 ├── config.py              # Configuration management
 ├── run.py                 # Application launcher
 ├── requirements.txt       # Python dependencies
@@ -189,6 +217,22 @@ launchctl load ~/Library/LaunchAgents/com.moip.manager.plist
 ## API Reference
 
 See [API_DOCUMENTATION.md](API_DOCUMENTATION.md) for details on the Binary MoIP Controller APIs.
+
+## Updating
+
+### Desktop App
+
+1. Download the latest version from the [Releases](https://github.com/bbellwfu/moip-manager/releases) page
+2. Replace the old app with the new version
+3. Your settings and data are preserved (stored in user data directory)
+
+### From Source
+
+```bash
+cd moip_manager
+git pull origin main
+pip install -r requirements.txt  # In case dependencies changed
+```
 
 ## Troubleshooting
 

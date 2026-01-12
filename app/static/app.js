@@ -12,6 +12,60 @@ let receiverVideoSettingsLoaded = false;  // Whether receiver video settings hav
 let deviceIcons = {};  // Map of device_type_index -> icon_type
 let videoWalls = {};  // Map of vidwall_id -> video wall config
 let videoWallsLoaded = false;  // Whether video walls have been loaded
+let rxFilterTypes = new Set(['av', 'audio', 'videowall']);  // Active receiver filters (multi-select)
+let rxAllMode = true;  // Whether "All" was explicitly clicked (vs individual types)
+let txFilterType = 'all';  // Current transmitter filter: 'all', 'online', 'offline'
+
+// --- Filter State Persistence ---
+function saveFilterState() {
+    const state = {
+        rxFilterTypes: Array.from(rxFilterTypes),
+        rxAllMode: rxAllMode,
+        txFilterType: txFilterType
+    };
+    localStorage.setItem('moip_filter_state', JSON.stringify(state));
+}
+
+function loadFilterState() {
+    try {
+        const saved = localStorage.getItem('moip_filter_state');
+        if (saved) {
+            const state = JSON.parse(saved);
+            if (state.rxFilterTypes && Array.isArray(state.rxFilterTypes)) {
+                rxFilterTypes = new Set(state.rxFilterTypes);
+            }
+            if (typeof state.rxAllMode === 'boolean') {
+                rxAllMode = state.rxAllMode;
+            }
+            if (state.txFilterType) {
+                txFilterType = state.txFilterType;
+            }
+        }
+    } catch (e) {
+        console.error('Error loading filter state:', e);
+    }
+}
+
+function applyFilterStateToUI() {
+    // Apply Rx filter pills
+    document.querySelectorAll('.rx-filter-pill').forEach(pill => {
+        const filter = pill.dataset.filter;
+        if (rxAllMode) {
+            pill.classList.toggle('active', filter === 'all');
+        } else {
+            if (filter === 'all') {
+                pill.classList.remove('active');
+            } else {
+                pill.classList.toggle('active', rxFilterTypes.has(filter));
+            }
+        }
+    });
+
+    // Apply Tx filter pills
+    document.querySelectorAll('.tx-filter-pill').forEach(pill => {
+        pill.classList.toggle('active', pill.dataset.filter === txFilterType);
+    });
+}
 let selectedRx = null;
 let editingDevice = null;
 let restoringSnapshotId = null;
@@ -51,6 +105,10 @@ function hideActivity() {
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     await loadAppSettings();
+
+    // Load and apply persisted filter state
+    loadFilterState();
+    applyFilterStateToUI();
 
     // Check URL hash for initial tab (priority: URL hash > default_tab setting > dashboard)
     const hashTab = getTabFromHash();
@@ -600,6 +658,72 @@ function getRecentTransmitters(maxCount = 5) {
     return activeTxs;
 }
 
+// Filter receivers by subtype (multi-select toggle)
+function filterReceivers(filterType) {
+    if (filterType === 'all') {
+        // "All" enables all types and sets "All mode"
+        rxFilterTypes = new Set(['av', 'audio', 'videowall']);
+        rxAllMode = true;
+    } else if (rxAllMode) {
+        // Coming from "All mode" - select ONLY the clicked type (exclusive)
+        rxFilterTypes = new Set([filterType]);
+        rxAllMode = false;
+    } else {
+        // Individual types selected - toggle the clicked type
+        if (rxFilterTypes.has(filterType)) {
+            rxFilterTypes.delete(filterType);
+            // Don't allow empty selection - if removing last one, add it back
+            if (rxFilterTypes.size === 0) {
+                rxFilterTypes.add(filterType);
+            }
+        } else {
+            rxFilterTypes.add(filterType);
+        }
+        rxAllMode = false;
+    }
+
+    // Update pill button states based on rxAllMode
+    document.querySelectorAll('.rx-filter-pill').forEach(pill => {
+        const filter = pill.dataset.filter;
+        if (rxAllMode) {
+            // In "All mode", only the "All" pill is visually active
+            pill.classList.toggle('active', filter === 'all');
+        } else {
+            // In individual mode, show selected types (not "All")
+            if (filter === 'all') {
+                pill.classList.remove('active');
+            } else {
+                pill.classList.toggle('active', rxFilterTypes.has(filter));
+            }
+        }
+    });
+
+    // Save filter state to localStorage
+    saveFilterState();
+
+    // Re-render with new filter
+    renderReceivers();
+}
+
+// Filter transmitters by online status
+function filterTransmitters(filterType) {
+    txFilterType = filterType;
+
+    // Update pill button states
+    document.querySelectorAll('.tx-filter-pill').forEach(pill => {
+        pill.classList.remove('active');
+        if (pill.dataset.filter === filterType) {
+            pill.classList.add('active');
+        }
+    });
+
+    // Save filter state to localStorage
+    saveFilterState();
+
+    // Re-render with new filter
+    renderTransmitters();
+}
+
 // Render receiver cards
 function renderReceivers() {
     const grid = document.getElementById('receivers-grid');
@@ -616,8 +740,22 @@ function renderReceivers() {
         return;
     }
 
+    // Filter receivers by subtype (multi-select)
+    let filteredReceivers = [...receivers];
+    filteredReceivers = filteredReceivers.filter(rx => rxFilterTypes.has(rx.subtype));
+
+    // Show message if no receivers match the filter
+    if (filteredReceivers.length === 0) {
+        grid.innerHTML = `
+            <div class="loading-message">
+                <span>No matching receivers found</span>
+            </div>
+        `;
+        return;
+    }
+
     // Sort receivers by ID
-    const sortedReceivers = [...receivers].sort((a, b) => a.id - b.id);
+    const sortedReceivers = filteredReceivers.sort((a, b) => a.id - b.id);
 
     // Get recent/active transmitters for quick select
     const recentTxs = getRecentTransmitters(5);
@@ -976,9 +1114,8 @@ function renderTransmitters() {
         return;
     }
 
-    // Get sort and filter values
+    // Get sort value
     const sortBy = document.getElementById('tx-sort')?.value || 'id';
-    const filterBy = document.getElementById('tx-filter')?.value || 'all';
 
     // Save settings to server
     saveAppSettings();
@@ -989,11 +1126,22 @@ function renderTransmitters() {
         return { ...tx, rxCount, isActive: rxCount > 0 };
     });
 
-    // Apply filter (use is_online for actual hardware status)
-    if (filterBy === 'online') {
+    // Apply filter using pill selection (use is_online for actual hardware status)
+    if (txFilterType === 'online') {
         txList = txList.filter(tx => tx.is_online !== false);
-    } else if (filterBy === 'offline') {
+    } else if (txFilterType === 'offline') {
         txList = txList.filter(tx => tx.is_online === false);
+    }
+
+    // Show message if no transmitters match the filter
+    if (txList.length === 0) {
+        const filterLabel = txFilterType === 'online' ? 'online' : 'offline';
+        list.innerHTML = `
+            <div class="loading-message">
+                <span>No ${filterLabel} transmitters found</span>
+            </div>
+        `;
+        return;
     }
 
     // Apply sort
@@ -1044,8 +1192,13 @@ function renderTransmitters() {
         const isOffline = tx.is_online === false;
         const indicatorClass = isOffline ? 'offline' : (tx.isActive ? 'active' : 'inactive');
 
-        // Audio badge for audio-only transmitters
-        const audioBadge = tx.subtype === 'audio' ? '<span class="tx-audio-badge">Audio</span>' : '';
+        // Subtype badge for audio-only and ARC transmitters
+        let subtypeBadge = '';
+        if (tx.subtype === 'audio') {
+            subtypeBadge = '<span class="tx-audio-badge">Audio</span>';
+        } else if (tx.subtype === 'arc') {
+            subtypeBadge = '<span class="tx-arc-badge">ARC</span>';
+        }
 
         // Status text
         let statusText;
@@ -1060,7 +1213,7 @@ function renderTransmitters() {
         row.innerHTML = `
             <div class="tx-indicator ${indicatorClass}"></div>
             <span class="tx-name" onclick="editName('tx', ${tx.id}, '${escapeHtml(tx.name)}')">
-                Tx${tx.id}: ${escapeHtml(tx.name)} ${audioBadge}
+                Tx${tx.id}: ${escapeHtml(tx.name)} ${subtypeBadge}
             </span>
             ${statsHtml}
             <button class="tx-preview-btn" onclick="openPreviewModal(${tx.id}, '${escapeHtml(tx.name)}'); event.stopPropagation();">Preview</button>

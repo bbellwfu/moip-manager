@@ -114,8 +114,10 @@ async def get_all_devices():
         def tx_sort_key(g):
             idx = g.get("settings", {}).get("index") or 999
             subtype = get_subtype(g)
+            # Sort order: regular tx first (by index), then ARC (index 0)
+            is_arc = g.get("desc") == "audio_return" or idx == 0
             subtype_order = 0 if subtype == 'av' else 1
-            return (idx, subtype_order)
+            return (0 if not is_arc else 1, idx if idx > 0 else 999, subtype_order)
 
         sorted_tx_groups = sorted(tx_groups, key=tx_sort_key)
 
@@ -130,6 +132,11 @@ async def get_all_devices():
             online = is_online(group)
             group_id = group.get("id")
             rx_count = tx_rx_counts.get(idx, 0)
+
+            # Detect ARC (Audio Return Channel) transmitters
+            is_arc = group.get("desc") == "audio_return"
+            if is_arc:
+                subtype = "arc"
 
             transmitters.append(Transmitter(
                 id=idx,

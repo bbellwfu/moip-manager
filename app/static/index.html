@@ -36,7 +36,15 @@
         <!-- Dashboard Tab -->
         <div id="dashboard-tab" class="tab-content active">
             <section id="receivers-section">
-                <h2>Receivers</h2>
+                <div class="section-header">
+                    <h2>Receivers</h2>
+                    <div class="rx-filter-pills">
+                        <button class="rx-filter-pill active" data-filter="all" onclick="filterReceivers('all')">All</button>
+                        <button class="rx-filter-pill av" data-filter="av" onclick="filterReceivers('av')">AV</button>
+                        <button class="rx-filter-pill audio" data-filter="audio" onclick="filterReceivers('audio')">Audio</button>
+                        <button class="rx-filter-pill videowall" data-filter="videowall" onclick="filterReceivers('videowall')">Video Wall</button>
+                    </div>
+                </div>
                 <div id="receivers-grid" class="device-grid">
                     <!-- Receiver cards will be inserted here -->
                 </div>
@@ -54,13 +62,10 @@
                                 <option value="status">Online First</option>
                             </select>
                         </div>
-                        <div class="control-group">
-                            <label>Show:</label>
-                            <select id="tx-filter" onchange="renderTransmitters()">
-                                <option value="all">All</option>
-                                <option value="online">Online Only</option>
-                                <option value="offline">Offline Only</option>
-                            </select>
+                        <div class="tx-filter-pills">
+                            <button class="tx-filter-pill active" data-filter="all" onclick="filterTransmitters('all')">All</button>
+                            <button class="tx-filter-pill online" data-filter="online" onclick="filterTransmitters('online')">Online</button>
+                            <button class="tx-filter-pill offline" data-filter="offline" onclick="filterTransmitters('offline')">Offline</button>
                         </div>
                     </div>
                 </div>

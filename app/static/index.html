@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoIP Manager</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>MoIP Manager</h1>
+        <div class="header-controls">
+            <span id="activity-status" class="activity-indicator"></span>
+            <span id="connection-status" class="status-indicator disconnected">Disconnected</span>
+            <button id="refresh-btn" onclick="refreshAll()">Refresh</button>
+        </div>
+    </header>
+
+    <nav class="tabs">
+        <div class="tabs-left">
+            <button class="tab-btn active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab-btn" onclick="showTab('inventory')">Inventory</button>
+            <button class="tab-btn" onclick="showTab('snapshots')">Snapshots</button>
+            <button class="tab-btn" onclick="showTab('settings')">Settings</button>
+        </div>
+        <div class="tabs-right">
+            <span class="status-item" id="tx-count">TX: --</span>
+            <span class="status-item" id="rx-count">RX: --</span>
+            <span class="status-item" id="active-streams">Active: --</span>
+            <span class="status-item" id="controller-ip">Controller: --</span>
+            <button class="info-btn" onclick="openControllerInfoModal()" title="Controller Info">i</button>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content active">
+            <section id="receivers-section">
+                <h2>Receivers</h2>
+                <div id="receivers-grid" class="device-grid">
+                    <!-- Receiver cards will be inserted here -->
+                </div>
+            </section>
+
+            <section id="transmitters-section">
+                <div class="section-header">
+                    <h2>Transmitters</h2>
+                    <div class="list-controls">
+                        <div class="control-group">
+                            <label>Sort:</label>
+                            <select id="tx-sort" onchange="renderTransmitters()">
+                                <option value="id">By Number</option>
+                                <option value="name">By Name</option>
+                                <option value="status">Online First</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Show:</label>
+                            <select id="tx-filter" onchange="renderTransmitters()">
+                                <option value="all">All</option>
+                                <option value="online">Online Only</option>
+                                <option value="offline">Offline Only</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div id="transmitters-list" class="transmitters-list">
+                    <!-- Transmitter list will be inserted here -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Inventory Tab -->
+        <div id="inventory-tab" class="tab-content">
+            <section>
+                <div class="section-header">
+                    <h2>Device Inventory</h2>
+                    <div class="inventory-controls">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="include-virtual-toggle" checked onchange="renderInventory()">
+                            <span>Include Virtual Devices</span>
+                        </label>
+                        <button class="sync-btn" onclick="syncDevices()">Sync from Controller</button>
+                    </div>
+                </div>
+                <div id="inventory-table-container">
+                    <table id="inventory-table" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Model</th>
+                                <th>MAC Address</th>
+                                <th>IP Address</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-tbody">
+                            <!-- Inventory rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="virtual-footnote" class="inventory-footnote" style="display: none;">
+                    <strong>Virtual:</strong> This device may be related to an integration with a home automation system such as Control4.
+                </p>
+            </section>
+        </div>
+
+        <!-- Snapshots Tab -->
+        <div id="snapshots-tab" class="tab-content">
+            <section>
+                <div class="section-header">
+                    <h2>Configuration Snapshots</h2>
+                    <button class="save-btn" onclick="openSnapshotModal()">Save Current Config</button>
+                </div>
+                <div id="snapshots-list">
+                    <!-- Snapshots will be inserted here -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings-tab" class="tab-content">
+            <section>
+                <h2>Application Settings</h2>
+                <form id="settings-form" onsubmit="saveSettings(event)">
+                    <div class="settings-section">
+                        <h3>Controller Connection</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label for="setting-controller-ip">Controller IP Address</label>
+                                <input type="text" id="setting-controller-ip" placeholder="192.168.40.20">
+                            </div>
+                            <div class="setting-item">
+                                <label for="setting-telnet-port">Telnet Port</label>
+                                <input type="number" id="setting-telnet-port" placeholder="23" min="1" max="65535">
+                            </div>
+                            <div class="setting-item">
+                                <label for="setting-api-port">HTTPS API Port</label>
+                                <input type="number" id="setting-api-port" placeholder="443" min="1" max="65535">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Authentication</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label for="setting-username">API Username</label>
+                                <input type="text" id="setting-username" placeholder="binary">
+                            </div>
+                            <div class="setting-item">
+                                <label for="setting-password">API Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="setting-password" placeholder="Enter password">
+                                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">Show</button>
+                                </div>
+                                <span class="setting-hint">Leave blank to keep existing password</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Display Options</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label for="setting-refresh-interval">Auto-Refresh Interval</label>
+                                <select id="setting-refresh-interval">
+                                    <option value="0">Off</option>
+                                    <option value="15">15 seconds</option>
+                                    <option value="30">30 seconds</option>
+                                    <option value="60">1 minute</option>
+                                    <option value="300">5 minutes</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="setting-quick-buttons">Quick-Select TX Buttons</label>
+                                <select id="setting-quick-buttons">
+                                    <option value="0">None</option>
+                                    <option value="3">3 buttons</option>
+                                    <option value="5">5 buttons</option>
+                                    <option value="8">8 buttons</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="setting-default-tab">Default Tab</label>
+                                <select id="setting-default-tab">
+                                    <option value="dashboard">Dashboard</option>
+                                    <option value="inventory">Inventory</option>
+                                    <option value="snapshots">Snapshots</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3>Advanced</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item checkbox-item">
+                                <label>
+                                    <input type="checkbox" id="setting-verify-ssl">
+                                    <span>Verify SSL Certificate</span>
+                                </label>
+                                <span class="setting-hint">Only enable if controller has a trusted certificate</span>
+                            </div>
+                            <div class="setting-item setting-item-narrow">
+                                <label for="setting-timeout">Connection Timeout (seconds)</label>
+                                <input type="number" id="setting-timeout" placeholder="10" min="1" max="60">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button type="submit" class="save-btn">Save Settings</button>
+                        <button type="button" class="cancel-btn" onclick="loadSettings()">Discard Changes</button>
+                        <button type="button" class="test-btn" onclick="testConnection()">Test Connection</button>
+                    </div>
+                </form>
+                <div id="settings-status" class="settings-status"></div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Switch Modal -->
+    <div id="switch-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Source for <span id="modal-rx-name"></span></h3>
+                <button class="close-modal-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="tx-options" class="tx-options">
+                <!-- Transmitter options will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Name Modal -->
+    <div id="name-modal" class="modal">
+        <div class="modal-content">
+            <h3>Edit Device</h3>
+            <label class="modal-label">Name</label>
+            <input type="text" id="name-input" placeholder="Enter new name">
+            <label class="modal-label" id="icon-picker-label">Icon</label>
+            <div id="icon-picker" class="icon-picker">
+                <!-- Icon options will be inserted here -->
+            </div>
+            <div class="modal-buttons">
+                <button class="save-btn" onclick="saveName()">Save</button>
+                <button class="cancel-btn" onclick="closeNameModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Snapshot Modal -->
+    <div id="snapshot-modal" class="modal">
+        <div class="modal-content">
+            <h3>Save Configuration Snapshot</h3>
+            <input type="text" id="snapshot-name" placeholder="Snapshot name (e.g., 'Before party setup')">
+            <textarea id="snapshot-desc" placeholder="Description (optional)"></textarea>
+            <div class="modal-buttons">
+                <button class="save-btn" onclick="saveSnapshot()">Save Snapshot</button>
+                <button class="cancel-btn" onclick="closeSnapshotModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Snapshot Modal -->
+    <div id="restore-modal" class="modal">
+        <div class="modal-content">
+            <h3>Restore Snapshot: <span id="restore-snapshot-name"></span></h3>
+            <p class="modal-info">What would you like to restore?</p>
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="restore-routing" checked> Routing (TX to RX assignments)</label>
+                <label><input type="checkbox" id="restore-names" checked> Device Names</label>
+            </div>
+            <div class="modal-buttons">
+                <button class="save-btn" onclick="confirmRestore()">Restore</button>
+                <button class="cancel-btn" onclick="closeRestoreModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="modal">
+        <div class="modal-content preview-modal-content">
+            <div class="preview-header">
+                <h3 id="preview-tx-name">Transmitter Preview</h3>
+                <button class="close-preview-btn" onclick="closePreviewModal()">&times;</button>
+            </div>
+            <div id="preview-video-stats" class="preview-stats"></div>
+            <div id="preview-image-container" class="preview-image-container">
+                <img id="preview-image" src="" alt="Transmitter preview">
+                <div id="preview-loading" class="preview-loading">Loading preview...</div>
+                <div id="preview-error" class="preview-error">No preview available</div>
+            </div>
+            <button class="refresh-preview-btn" onclick="refreshPreview()">Refresh Preview</button>
+        </div>
+    </div>
+
+    <!-- Controller Info Modal -->
+    <div id="controller-info-modal" class="modal">
+        <div class="modal-content controller-info-content">
+            <div class="preview-header">
+                <h3>Controller Information</h3>
+                <button class="close-preview-btn" onclick="closeControllerInfoModal()">&times;</button>
+            </div>
+            <div id="controller-info-body" class="controller-info-body">
+                <div class="info-loading">Loading controller information...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Connection Modal -->
+    <div id="test-connection-modal" class="modal">
+        <div class="modal-content test-connection-content">
+            <div class="preview-header">
+                <h3>Connection Test Results</h3>
+                <button class="close-preview-btn" onclick="closeTestConnectionModal()">&times;</button>
+            </div>
+            <div id="test-connection-body" class="test-connection-body">
+                <div class="test-loading">Testing connections...</div>
+            </div>
+            <div class="modal-buttons">
+                <button class="save-btn" onclick="closeTestConnectionModal()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

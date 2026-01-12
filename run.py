@@ -25,11 +25,12 @@ def open_browser(port: int, delay: float = 1.5):
 if __name__ == "__main__":
     port = config.WEB_PORT
 
-    # When packaged, auto-open browser and disable reload
+    # When packaged, import app directly and disable reload
     if is_packaged():
+        from app.main import app
         open_browser(port)
         uvicorn.run(
-            "app.main:app",
+            app,
             host="127.0.0.1",  # Localhost only for packaged app
             port=port,
             reload=False,

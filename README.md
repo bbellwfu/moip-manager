@@ -32,16 +32,39 @@ The easiest way to get started - no Python or development tools required.
 2. Download the latest version for your platform:
    - **macOS**: `MoIP-Manager-vX.X.X-mac.dmg`
    - **Windows**: `MoIP-Manager-vX.X.X-win.zip`
-3. Install and run:
-   - **macOS**: Open the DMG, drag to Applications, double-click to launch
-   - **Windows**: Extract the ZIP, run `MoIP Manager.exe`
-4. Your browser will automatically open to the MoIP Manager interface
+
+#### macOS Installation
+
+1. Open the downloaded `.dmg` file
+2. Drag **MoIP Manager** to your Applications folder
+3. Double-click to launch from Applications
+4. **First launch**: macOS may show a security warning since the app isn't signed:
+   - Click **Cancel** on the warning dialog
+   - Go to **System Preferences > Privacy & Security**
+   - Scroll down and click **Open Anyway** next to the MoIP Manager message
+   - Click **Open** when prompted again
+
+#### Windows Installation
+
+1. Extract the downloaded `.zip` file to a folder (e.g., `C:\Program Files\MoIP Manager`)
+2. Run `MoIP Manager.exe`
+3. **First launch**: Windows SmartScreen may show a warning:
+   - Click **More info**
+   - Click **Run anyway**
+
+#### After Launch
+
+- Your default browser will automatically open to the MoIP Manager interface
+- A **menu bar icon** (macOS) or **system tray icon** (Windows) will appear
+- Click the icon to access:
+  - **Open Web Interface** - Opens the dashboard in your browser
+  - **Quit** - Stops the MoIP Manager service
 
 **Data Location**: Your settings and snapshots are stored in:
 - macOS: `~/Library/Application Support/MoIP Manager/`
 - Windows: `%APPDATA%\MoIP Manager\`
 
-These files persist across app updates.
+These files persist across app updates, so you won't lose your configuration.
 
 ### Option 2: Run from Source (For Developers)
 
